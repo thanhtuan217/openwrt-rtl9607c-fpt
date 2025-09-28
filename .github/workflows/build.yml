@@ -3,19 +3,20 @@ name: OpenWrt RTL9607C Builder
 on:
   push:
     branches:
-      - master
-  workflow_dispatch:
+      - master  # Kích hoạt khi có thay đổi trên nhánh master/main
+  workflow_dispatch: # Cho phép bạn bấm nút Run/Chạy thủ công
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest # Sử dụng máy chủ ảo chạy Ubuntu mới nhất
 
     steps:
     - name: 1. Checkout repository
       uses: actions/checkout@v4
-
+      
     - name: 2. Clone OpenWrt Source and Update Feeds
       run: |
+        # Clone nhánh master để có hỗ trợ RTL9607C mới nhất
         git clone https://git.openwrt.org/openwrt/openwrt.git openwrt-repo
         cd openwrt-repo
         ./scripts/feeds update -a
@@ -23,15 +24,18 @@ jobs:
 
     - name: 3. Apply Custom Configuration
       run: |
-      # Chép file .config từ thư mục gốc của repo vào thư mục OpenWrt source
-      # github.workspace là biến trỏ đến thư mục gốc của repo 
-       cp ${{ github.workspace }}/.config openwrt-repo/.config
-       cd openwrt-repo
-       make defconfig
+        # Chép file .config TỪ THƯ MỤC GỐC của repository của bạn 
+        # (nơi GitHub Actions checkout mã nguồn của bạn)
+        # VÀO THƯ MỤC NGUỒN OpenWrt vừa clone.
+        # Dòng này đã được sửa để hoạt động đúng.
+        cp "${{ github.workspace }}/.config" "openwrt-repo/.config"
+        cd openwrt-repo
+        make defconfig
 
     - name: 4. Compile the firmware
       run: |
         cd openwrt-repo
+        # Lệnh biên dịch. -j$(nproc) dùng tất cả nhân CPU để tăng tốc
         make -j$(nproc) V=s
 
     - name: 5. Upload firmware to artifacts
