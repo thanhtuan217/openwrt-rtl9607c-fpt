@@ -24,7 +24,7 @@ jobs:
     - name: 3. Apply Custom Configuration
       run: |
       # Chép file .config từ thư mục gốc của repo vào thư mục OpenWrt source
-      # github.workspace là biến trỏ đến thư mục gốc của repo bạn
+      # github.workspace là biến trỏ đến thư mục gốc của repo 
        cp ${{ github.workspace }}/.config openwrt-repo/.config
        cd openwrt-repo
        make defconfig
