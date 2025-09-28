@@ -11,7 +11,7 @@
           fi
           
           # Logic tìm kiếm file firmware (ưu tiên G97RG6W, sau đó là tên generic hoặc bất kỳ factory.bin nào)
-          # Bước 1: Tìm file có chứa "g97rg6w" trong tên
+          # Bước 1: Tìm file có chứa từ "g97rg6w" trong tên
           FIRMWARE_FILE=$(find "$FIRMWARE_DIR" -maxdepth 1 -name "openwrt-*-g97rg6w-squashfs-factory.bin" -print -quit)
           
           if [ -z "$FIRMWARE_FILE" ]; then
