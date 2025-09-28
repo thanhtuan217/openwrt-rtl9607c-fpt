@@ -1,45 +1,45 @@
-name: OpenWrt RTL9607C Builder
+- name: Prepare Artifacts
+        id: prepare_artifacts
+        run: |
+          FIRMWARE_DIR="./openwrt/bin/targets/realtek/rtl83xx"
+          ARTIFACT_NAME="OpenWrt-G97RG6W-Firmware"
+          
+          # Tạo tên file custom nếu được cung cấp từ input
+          CUSTOM_NAME="${{ github.event.inputs.custom_firmware_name }}"
+          if [ -n "$CUSTOM_NAME" ]; then
+            ARTIFACT_NAME="$CUSTOM_NAME"
+          fi
+          
+          # Logic tìm kiếm file firmware (ưu tiên G97RG6W, sau đó là tên generic hoặc bất kỳ factory.bin nào)
+          # Bước 1: Tìm file có chứa "g97rg6w" trong tên
+          FIRMWARE_FILE=$(find "$FIRMWARE_DIR" -maxdepth 1 -name "openwrt-*-g97rg6w-squashfs-factory.bin" -print -quit)
+          
+          if [ -z "$FIRMWARE_FILE" ]; then
+              # Bước 2: Nếu không tìm thấy G97RG6W, tìm file có chứa "rtl9607c"
+              FIRMWARE_FILE=$(find "$FIRMWARE_DIR" -maxdepth 1 -name "openwrt-*-rtl9607c-squashfs-factory.bin" -print -quit)
+          fi
 
-on:
-  push:
-    branches:
-      - master  # Kích hoạt khi có thay đổi trên nhánh master/main
-  workflow_dispatch: # Cho phép bạn bấm nút Run/Chạy thủ công
+          if [ -z "$FIRMWARE_FILE" ]; then
+              # Bước 3: Nếu không tìm thấy tên cụ thể, tìm file "factory" có chứa "rtl83xx" hoặc "rtl838x"
+              FIRMWARE_FILE=$(find "$FIRMWARE_DIR" -maxdepth 1 -name "openwrt-*-rtl83xx-squashfs-factory.bin" -print -quit)
+          fi
 
-jobs:
-  build:
-    runs-on: ubuntu-latest # Sử dụng máy chủ ảo chạy Ubuntu mới nhất
+          if [ -z "$FIRMWARE_FILE" ]; then
+              FIRMWARE_FILE=$(find "$FIRMWARE_DIR" -maxdepth 1 -name "openwrt-*-rtl838x-squashfs-factory.bin" -print -quit)
+          fi
 
-    steps:
-    - name: 1. Checkout repository
-      uses: actions/checkout@v4
-      
-    - name: 2. Clone OpenWrt Source and Update Feeds
-      run: |
-        # Clone nhánh master để có hỗ trợ RTL9607C mới nhất
-        git clone https://git.openwrt.org/openwrt/openwrt.git openwrt-repo
-        cd openwrt-repo
-        ./scripts/feeds update -a
-        ./scripts/feeds install -a
+          if [ -z "$FIRMWARE_FILE" ]; then
+              # Bước 4: Nếu vẫn không tìm thấy, tìm bất kỳ file "*.squashfs-factory.bin" nào trong thư mục đó
+              # (Giả định rằng chỉ có 1 file factory được build cho target này, nếu có nhiều sẽ có rủi ro)
+              FIRMWARE_FILE=$(find "$FIRMWARE_DIR" -maxdepth 1 -name "*.squashfs-factory.bin" -print -quit)
+          fi
 
-    - name: 3. Apply Custom Configuration
-      run: |
-        # Chép file .config TỪ THƯ MỤC GỐC của repository của bạn 
-        # (nơi GitHub Actions checkout mã nguồn của bạn)
-        # VÀO THƯ MỤC NGUỒN OpenWrt vừa clone.
-        # Dòng này đã được sửa để hoạt động đúng.
-        cp "${{ github.workspace }}/.config" "openwrt-repo/.config"
-        cd openwrt-repo
-        make defconfig
+          if [ -z "$FIRMWARE_FILE" ]; then
+              echo "Error: Factory firmware file not found in $FIRMWARE_DIR"
+              exit 1
+          fi
 
-    - name: 4. Compile the firmware
-      run: |
-        cd openwrt-repo
-        # Lệnh biên dịch. -j$(nproc) dùng tất cả nhân CPU để tăng tốc
-        make -j$(nproc) V=s
-
-    - name: 5. Upload firmware to artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: OpenWrt-G97RG6W-Firmware
-        path: openwrt-repo/bin/targets/realtek/
+          echo "Found firmware file: $FIRMWARE_FILE"
+          echo "firmware_path=$FIRMWARE_FILE" >> $GITHUB_ENV
+          echo "artifact_name=$ARTIFACT_NAME" >> $GITHUB_ENV
+          echo "firmware_name=$(basename $FIRMWARE_FILE)" >> $GITHUB_ENV
