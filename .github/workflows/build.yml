@@ -23,10 +23,11 @@ jobs:
 
     - name: 3. Apply Custom Configuration
       run: |
-        # File .config được Git checkout ở thư mục gốc (tương đương ../.config so với thư mục openwrt-repo)
-        cp ../.config openwrt-repo/.config
-        cd openwrt-repo
-        make defconfig
+      # Chép file .config từ thư mục gốc của repo vào thư mục OpenWrt source
+      # github.workspace là biến trỏ đến thư mục gốc của repo bạn
+       cp ${{ github.workspace }}/.config openwrt-repo/.config
+       cd openwrt-repo
+       make defconfig
 
     - name: 4. Compile the firmware
       run: |
