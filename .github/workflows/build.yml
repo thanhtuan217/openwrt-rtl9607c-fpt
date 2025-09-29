@@ -29,11 +29,16 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
-    container:
-      image: docker.io/openwrt/build:latest # Sử dụng image Docker chính thức để đảm bảo môi trường build
+    runs-on: ubuntu-22.04 # Chạy trên runner Ubuntu tiêu chuẩn
+    # Đã xóa 'container' để tránh lỗi kéo image
 
     steps:
+      - name: Install dependencies
+        # Cài đặt tất cả các gói cần thiết để build OpenWrt
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential diffutils gawk gcc-multilib libelf-dev libncurses5-dev rsync unzip wget git python3 file libssl-dev
+
       - name: Checkout Custom Files
         # Lấy các file cấu hình và package của bạn
         uses: actions/checkout@v4
@@ -63,12 +68,12 @@ jobs:
       - name: Adjust .config and Apply Patches
         working-directory: ./${{ env.REPO_NAME }}
         run: |
-          # Áp dụng patch nếu bạn có (tôi thấy bạn có file .patch)
+          # Áp dụng patch nếu bạn có (tôi đã tạm comment, bạn có thể uncomment nếu cần)
           # if [ -f ../custom_repo/openwrt-rtl9607c-fpt.patch ]; then
           #   patch -p1 < ../custom_repo/openwrt-rtl9607c-fpt.patch
           # fi
           
-          # Cập nhật .config để đảm bảo mọi thứ được chọn đúng
+          # Chạy defconfig để tích hợp các gói và cấu hình mới
           make defconfig
           
           # Tối ưu hóa .config: Xóa và thêm lại CONFIG_TARGET_DEVICE cho chắc chắn
@@ -101,7 +106,6 @@ jobs:
           fi
           
           # Logic tìm kiếm file firmware (ưu tiên G97RG6W)
-          # Tìm file có chứa "g97rg6w" hoặc "factory" trong tên
           FIRMWARE_FILE=$(find "$FIRMWARE_DIR" -maxdepth 1 -type f -name "*g97rg6w*-squashfs-factory.bin" -o -name "*rtl83xx*-squashfs-factory.bin" | head -n 1)
 
           if [ -z "$FIRMWARE_FILE" ]; then
