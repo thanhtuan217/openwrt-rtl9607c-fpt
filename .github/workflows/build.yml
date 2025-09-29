@@ -28,22 +28,23 @@ jobs:
           git clone --depth 1 https://github.com/openwrt/openwrt.git openwrt
           
           # Cần chạy feeds update/install SAU KHI copy custom files để tránh lỗi
-          # Tạm thời bỏ qua bước feeds ở đây, chuyển xuống sau khi copy files
           
       - name: 4. Copy Custom Target and .config
-        # KHẮC PHỤC LỖI: Copy .config và target/ từ thư mục gốc vào thư mục openwrt/
+        # KHẮC PHỤC LỖI PATH: Copy nội dung từ thư mục gốc vào thư mục openwrt/
         run: |
           echo "Applying custom files (target/ và .config)..."
           
-          # LỖI ĐƯỢC FIX: Copy file .config quan trọng vào thư mục OpenWrt
+          # 1. Copy file .config quan trọng vào thư mục OpenWrt
           cp -f .config openwrt/.config
           
-          # LỖI ĐƯỢC FIX: Copy thư mục target/ (chứa định nghĩa RTL9607C)
-          cp -r target openwrt/
-          
-          # Copy thư mục package/ (nếu có)
+          # 2. KHẮC PHỤC LỖI: Copy NỘI DUNG thư mục target/ (chứa định nghĩa RTL9607C)
+          # Dùng 'target/*' để copy nội dung đè lên openwrt/target/
+          cp -rf target/* openwrt/target/
+     
+          # 3. KHẮC PHỤC LỖI: Copy NỘI DUNG thư mục package/ (nếu có)
           if [ -d "package" ]; then
-            cp -r package openwrt/
+            # Dùng 'package/*' để copy nội dung đè lên openwrt/package/
+            cp -rf package/* openwrt/package/
             echo "✅ package/ also copied."
           fi
           
@@ -67,4 +68,9 @@ jobs:
           # Bắt đầu build
           make -j$(nproc) V=s
           
-      # (Bạn cần bổ sung bước Upload Artifacts tương tự như tôi đã gợi ý ở lần trước)
+      - name: 7. Upload Artifacts (Firmware)
+        # Tải file firmware đã build lên GitHub Actions Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenWrt_Firmware_RTL9607C
+          path: openwrt/bin/targets/
