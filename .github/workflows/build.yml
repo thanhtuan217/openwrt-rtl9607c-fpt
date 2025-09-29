@@ -13,7 +13,7 @@ on:
         required: false
         default: ''
 
-  # Kích hoạt khi có thay đổi trên branch chính (master/main)
+  # Kích hoạt khi có thay đổi trên branch chính
   push:
     branches:
       - master
@@ -27,7 +27,7 @@ on:
 env:
   # Thiết lập múi giờ Việt Nam
   TZ: Asia/Ho_Chi_Minh
-  # Tên thư mục chứa mã nguồn (cần phải giống tên repo)
+  # Tên thư mục chứa mã nguồn (Bắt buộc phải là tên repo của bạn)
   REPO_NAME: openwrt-rtl9607c-fpt
   # Tên người dùng và repository để clone
   CUSTOM_REPO_OWNER: thanhtuan217
@@ -44,7 +44,7 @@ jobs:
           # Clone repository tùy chỉnh của bạn
           repository: ${{ env.CUSTOM_REPO_OWNER }}/${{ env.CUSTOM_REPO_NAME }}
           ref: main # Hoặc tên branch bạn đang làm việc
-          # Clone vào thư mục tên là openwrt-rtl9607c-fpt
+          # Clone vào thư mục tên là openwrt-rtl9607c-fpt (dùng cho các bước sau)
           path: ${{ env.REPO_NAME }} 
           
       - name: 2. Install dependencies
@@ -54,10 +54,10 @@ jobs:
           sudo apt install -y build-essential diffutils gawk gcc-multilib libelf-dev libncurses5-dev rsync unzip wget git python3 file libssl-dev
           
       - name: 3. Update Feeds và Thiết lập Cấu hình
-        # SỬA LỖI: Chỉ định thư mục làm việc chính xác
+        # SỬA LỖI: Chỉ định thư mục làm việc chính xác tại đây
         working-directory: ./${{ env.REPO_NAME }}
         run: |
-          # Cập nhật và cài đặt feeds (packages bên ngoài)
+          # Lỗi đã khắc phục: ./scripts/feeds giờ sẽ được tìm thấy trong thư mục này
           ./scripts/feeds update -a
           ./scripts/feeds install -a
           
@@ -78,7 +78,7 @@ jobs:
         id: prepare_artifacts
         working-directory: ./${{ env.REPO_NAME }}
         run: |
-          # Đường dẫn thư mục chứa firmware sau khi build (Đã chỉnh sửa từ rtl83xx sang rtl9607c)
+          # Đường dẫn thư mục chứa firmware
           FIRMWARE_DIR="./bin/targets/realtek/rtl9607c" 
           ARTIFACT_NAME="OpenWrt-RTL9607C-WISP"
           
@@ -92,7 +92,6 @@ jobs:
 
           if [ -z "$FIRMWARE_FILE" ]; then
             echo "::warning::Factory firmware file not found. Attempting to find sysupgrade file."
-            # Nếu không tìm thấy factory, thử tìm sysupgrade (cần cho nâng cấp sau này)
             FIRMWARE_FILE=$(find "$FIRMWARE_DIR" -maxdepth 1 -type f -name "*squashfs-sysupgrade.bin" | head -n 1)
             if [ -z "$FIRMWARE_FILE" ]; then
                 echo "::error::No firmware file found. Build failure is likely."
