@@ -30,7 +30,7 @@ jobs:
       - name: Checkout Your Repo (Lấy .config và workflow)
         uses: actions/checkout@v4
 
-      - name: Checkout OpenWrt Source 💡 FIX: Tải mã nguồn OpenWrt
+      - name: Checkout OpenWrt Source FIX: Tải mã nguồn OpenWrt
         run: |
           # Clone mã nguồn OpenWrt chính thức vào thư mục con 'openwrt'
           # Bạn có thể thay 'openwrt-23.05' bằng 'main' nếu muốn bản mới nhất.
