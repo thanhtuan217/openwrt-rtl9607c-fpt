@@ -23,50 +23,57 @@ on:
 
 env:
   TZ: Asia/Ho_Chi_Minh
-  # Repo chứa các file cấu hình và patch của bạn
-  CUSTOM_REPO_PATH: custom_repo
+  # Đường dẫn chứa các file cấu hình và patch của bạn
+  CUSTOM_REPO_PATH: custom_repo 
 
 jobs:
   build:
+    # Build trên môi trường Ubuntu
     runs-on: ubuntu-22.04
     
     steps:
       - name: 1. Install dependencies
         run: |
           sudo apt update
-          # Cài đặt các gói cần thiết để build
           sudo apt install -y build-essential diffutils gawk gcc-multilib libelf-dev libncurses5-dev rsync unzip wget git python3 file libssl-dev
 
-      - name: 2. Checkout Custom Patch Repository
-        # Clone repo của bạn vào thư mục custom_repo
+      - name: 2. Checkout Custom Patch Repository (thanhtuan217/openwrt-rtl9607c-fpt)
+        # Clone repo tùy chỉnh của bạn vào thư mục custom_repo
         uses: actions/checkout@v4
         with:
           path: ${{ env.CUSTOM_REPO_PATH }}
-          # Lấy chính xác repo đang chạy workflow này
           repository: ${{ github.repository }}
           ref: ${{ github.ref_name }}
 
       - name: 3. Clone OpenWrt Source Code (Main Source)
         # Clone mã nguồn OpenWrt chính thức vào thư mục openwrt
         run: |
-          echo "Cloning OpenWrt source from git://git.openwrt.org/openwrt.git"
-          git clone --depth 1 git://git.openwrt.org/openwrt.git openwrt
+          echo "Cloning OpenWrt source from https://github.com/openwrt/openwrt"
+          # Sửa từ git:// sang HTTPS để tránh lỗi protocol
+          git clone --depth 1 https://github.com/openwrt/openwrt openwrt
           
-      - name: 4. Apply Custom Patches (Copy files)
-        # Ghi đè các file cấu hình và patch của bạn lên mã nguồn OpenWrt chính
+      - name: 4. Apply Custom Target/Patch Files (Sử dụng lệnh CP rõ ràng)
+        # SAO CHÉP TỪNG THƯ MỤC CỤ THỂ để đảm bảo file target và config được nhận diện
         run: |
-          echo "Applying custom patches from custom_repo to openwrt source..."
-          # Copy các thư mục và file cấu hình cần thiết
-          rsync -av ${{ env.CUSTOM_REPO_PATH }}/ openwrt/ \
-            --exclude '.git' \
-            --exclude '.github' \
-            --exclude 'README.md'
+          echo "Applying custom files from custom_repo to openwrt source..."
           
+          # 1. Copy file .config quan trọng
+          cp -f ${{ env.CUSTOM_REPO_PATH }}/.config openwrt/.config
+          
+          # 2. Copy thư mục target (chứa định nghĩa chip RTL9607C)
+          cp -r ${{ env.CUSTOM_REPO_PATH }}/target openwrt/
+          
+          # 3. Copy thư mục package (chứa các package tùy chỉnh)
+          if [ -d "${{ env.CUSTOM_REPO_PATH }}/package" ]; then
+            cp -r ${{ env.CUSTOM_REPO_PATH }}/package openwrt/
+          fi
+          
+          echo "Finished applying custom files."
+
       - name: 5. Update Feeds và Thiết lập Cấu hình
         # Chạy các lệnh trong thư mục openwrt chính
         run: |
           cd openwrt && \
-          # LỖI ĐƯỜNG DẪN ĐÃ ĐƯỢC KHẮC PHỤC: scripts/feeds giờ đã tồn tại
           ./scripts/feeds update -a && \
           ./scripts/feeds install -a && \
           make defconfig
@@ -77,18 +84,18 @@ jobs:
           make download -j$(nproc)
 
       - name: 7. Build Firmware
+        # V=s: verbose output (cần cho gỡ lỗi)
         run: |
           cd openwrt && \
           make -j$(nproc) V=s
 
-      - name: 8. Prepare Artifacts
+      - name: 8. Prepare Artifacts (Tìm file firmware)
         id: prepare_artifacts
         run: |
-          # Vẫn cần cd để tìm file
           cd openwrt
           
-          # Firmware nằm trong thư mục targets/realtek/rtl9607c
-          FIRMWARE_DIR="./bin/targets/realtek/rtl9607c" 
+          # Thư mục đích dựa trên CONFIG_TARGET_realtek_rtl83xx=y
+          FIRMWARE_DIR="./bin/targets/realtek/rtl83xx" 
           ARTIFACT_NAME="OpenWrt-RTL9607C-WISP"
           
           CUSTOM_NAME="${{ github.event.inputs.custom_firmware_name }}"
@@ -96,13 +103,15 @@ jobs:
             ARTIFACT_NAME="$CUSTOM_NAME"
           fi
           
-          FIRMWARE_FILE=$(find "$FIRMWARE_DIR" -maxdepth 1 -type f -name "*g97rg6w*-squashfs-factory.bin" -o -name "*rtl9607c*-squashfs-factory.bin" | head -n 1)
+          # Logic tìm kiếm file firmware factory (ưu tiên G97RG6W/rtl83xx)
+          FIRMWARE_FILE=$(find "$FIRMWARE_DIR" -maxdepth 1 -type f -name "*g97rg6w*-squashfs-factory.bin" -o -name "*rtl83xx*-squashfs-factory.bin" | head -n 1)
 
           if [ -z "$FIRMWARE_FILE" ]; then
-            echo "::error::No firmware file found. Build failure is likely."
+            echo "::error::No firmware file found in $FIRMWARE_DIR. Build failure is likely."
             exit 1
           fi
 
+          echo "Found firmware file: $FIRMWARE_FILE"
           # Output file path RELATIVE to the build root (openwrt/)
           echo "firmware_path=${FIRMWARE_FILE}" >> $GITHUB_OUTPUT 
           echo "artifact_name=$ARTIFACT_NAME" >> $GITHUB_OUTPUT
