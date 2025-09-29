@@ -1,6 +1,7 @@
-name: Build OpenWrt
+name: Build OpenWrt RTL9607C
 
 on:
+  # Cho phép chạy thủ công qua giao diện GitHub
   workflow_dispatch:
     inputs:
       ssh_to_image:
@@ -12,111 +13,105 @@ on:
         required: false
         default: ''
 
+  # Kích hoạt khi có thay đổi trên branch chính (master/main)
   push:
     branches:
       - master # Hoặc main, tùy vào branch chính của bạn
     paths:
-      - '.config' # Kích hoạt build khi file .config thay đổi
-      - '.github/workflows/build.yml' # Kích hoạt build khi build.yml thay đổi
+      - '.config'
+      - '.github/workflows/build.yml'
+      - 'package/**' # Kích hoạt build khi các gói Realtek thay đổi
 
 env:
   TZ: Asia/Ho_Chi_Minh
+  OPENWRT_BRANCH: openwrt-23.05 # Bạn có thể đổi sang 'main' nếu muốn phiên bản mới nhất
+  REPO_NAME: openwrt # Tên thư mục mã nguồn OpenWrt sau khi clone
 
 jobs:
   build:
     runs-on: ubuntu-22.04
+    container:
+      image: docker.io/openwrt/build:latest # Sử dụng image Docker chính thức để đảm bảo môi trường build
 
     steps:
-      - name: Checkout
+      - name: Checkout Custom Files
+        # Lấy các file cấu hình và package của bạn
         uses: actions/checkout@v4
+        with:
+          path: custom_repo # Đặt file của bạn vào thư mục custom_repo
 
-      - name: Install dependencies
+      - name: Clone OpenWrt Source
+        # Clone mã nguồn OpenWrt gốc vào thư mục 'openwrt'
         run: |
-          sudo apt update
-          sudo apt install -y build-essential diffutils gawk gcc-multilib libelf-dev libncurses5-dev rsync unzip wget git python3 file
-
-      - name: Download and update feeds
+          git clone --depth 1 https://github.com/openwrt/openwrt -b ${{ env.OPENWRT_BRANCH }} ${{ env.REPO_NAME }}
+          
+      - name: Install Feeds (in OpenWrt dir)
+        # Chạy scripts/feeds trong thư mục OpenWrt vừa clone
+        working-directory: ./${{ env.REPO_NAME }}
         run: |
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      - name: Load custom config
+      - name: Copy Custom Packages and Config
+        # Di chuyển các tệp tin tùy chỉnh của bạn vào OpenWrt
         run: |
-          # Copy .config từ thư mục gốc của repo vào thư mục OpenWrt
-          cp .config .config_openwrt_build
-          # Make sure it's in the right place relative to the OpenWrt source
-          mv .config_openwrt_build openwrt/.config
+          # Copy các packages Realtek của bạn vào thư mục package của OpenWrt
+          cp -r custom_repo/package/* ./${{ env.REPO_NAME }}/package/
+          # Copy .config vào thư mục OpenWrt
+          cp custom_repo/.config ./${{ env.REPO_NAME }}/.config
 
-
-      - name: Adjust .config for G97RG6W (Final safety checks)
-        working-directory: ./openwrt
+      - name: Adjust .config and Apply Patches
+        working-directory: ./${{ env.REPO_NAME }}
         run: |
-          # Xóa mọi DEVICE_XXXX khác để đảm bảo chỉ có G97RG6W được chọn
+          # Áp dụng patch nếu bạn có (tôi thấy bạn có file .patch)
+          # if [ -f ../custom_repo/openwrt-rtl9607c-fpt.patch ]; then
+          #   patch -p1 < ../custom_repo/openwrt-rtl9607c-fpt.patch
+          # fi
+          
+          # Cập nhật .config để đảm bảo mọi thứ được chọn đúng
+          make defconfig
+          
+          # Tối ưu hóa .config: Xóa và thêm lại CONFIG_TARGET_DEVICE cho chắc chắn
+          # Giả sử cấu hình target của bạn là realtek/rtl83xx
           sed -i '/CONFIG_TARGET_realtek_rtl83xx_DEVICE_.*=y/d' .config
-          # Thêm lại CONFIG_TARGET_realtek_rtl83xx_DEVICE_G97RG6W=y nếu chưa có
           grep -q "CONFIG_TARGET_realtek_rtl83xx_DEVICE_G97RG6W=y" .config || echo "CONFIG_TARGET_realtek_rtl83xx_DEVICE_G97RG6W=y" >> .config
           
-          # Đảm bảo các gói Luci cơ bản được chọn (như đã có trong .config của bạn)
-          grep -q "CONFIG_PACKAGE_luci=y" .config || echo "CONFIG_PACKAGE_luci=y" >> .config
-          grep -q "CONFIG_PACKAGE_luci-compat=y" .config || echo "CONFIG_PACKAGE_luci-compat=y" >> .config
-          grep -q "CONFIG_PACKAGE_luci-theme-bootstrap=y" .config || echo "CONFIG_PACKAGE_luci-theme-bootstrap=y" >> .config
-
-          # Nếu muốn bật SSH trong ảnh cuối cùng (chỉ để gỡ lỗi, không khuyến nghị cho sử dụng thông thường)
+          # Bật SSH nếu được yêu cầu
           if [ "${{ github.event.inputs.ssh_to_image }}" == "true" ]; then
             sed -i 's/# CONFIG_PACKAGE_dropbear is not set/CONFIG_PACKAGE_dropbear=y/' .config
           fi
 
-      - name: Build firmware
-        working-directory: ./openwrt
-        run: |
-          make defconfig
-          make -j$(nproc) V=s
+      - name: Download Build Dependencies
+        working-directory: ./${{ env.REPO_NAME }}
+        run: make download -j$(nproc)
+
+      - name: Build Firmware
+        working-directory: ./${{ env.REPO_NAME }}
+        run: make -j$(nproc) V=s
 
       - name: Prepare Artifacts
         id: prepare_artifacts
         run: |
-          FIRMWARE_DIR="./openwrt/bin/targets/realtek/rtl83xx"
-          ARTIFACT_NAME="OpenWrt-G97RG6W-Firmware"
+          FIRMWARE_DIR="./${{ env.REPO_NAME }}/bin/targets/realtek/rtl83xx"
+          ARTIFACT_NAME="OpenWrt-RTL9607C-G97RG6W-Firmware"
           
-          # Tạo tên file custom nếu được cung cấp từ input
           CUSTOM_NAME="${{ github.event.inputs.custom_firmware_name }}"
           if [ -n "$CUSTOM_NAME" ]; then
             ARTIFACT_NAME="$CUSTOM_NAME"
           fi
           
-          # Logic tìm kiếm file firmware (ưu tiên G97RG6W, sau đó là tên generic hoặc bất kỳ factory.bin nào)
-          # Bước 1: Tìm file có chứa "g97rg6w" trong tên
-          FIRMWARE_FILE=$(find "$FIRMWARE_DIR" -maxdepth 1 -name "openwrt-*-g97rg6w-squashfs-factory.bin" -print -quit)
-          
-          if [ -z "$FIRMWARE_FILE" ]; then
-              # Bước 2: Nếu không tìm thấy G97RG6W, tìm file có chứa "rtl9607c"
-              FIRMWARE_FILE=$(find "$FIRMWARE_DIR" -maxdepth 1 -name "openwrt-*-rtl9607c-squashfs-factory.bin" -print -quit)
-          fi
+          # Logic tìm kiếm file firmware (ưu tiên G97RG6W)
+          # Tìm file có chứa "g97rg6w" hoặc "factory" trong tên
+          FIRMWARE_FILE=$(find "$FIRMWARE_DIR" -maxdepth 1 -type f -name "*g97rg6w*-squashfs-factory.bin" -o -name "*rtl83xx*-squashfs-factory.bin" | head -n 1)
 
           if [ -z "$FIRMWARE_FILE" ]; then
-              # Bước 3: Nếu không tìm thấy tên cụ thể, tìm file "factory" có chứa "rtl83xx" hoặc "rtl838x"
-              FIRMWARE_FILE=$(find "$FIRMWARE_DIR" -maxdepth 1 -name "openwrt-*-rtl83xx-squashfs-factory.bin" -print -quit)
-          fi
-
-          if [ -z "$FIRMWARE_FILE" ]; then
-              FIRMWARE_FILE=$(find "$FIRMWARE_DIR" -maxdepth 1 -name "openwrt-*-rtl838x-squashfs-factory.bin" -print -quit)
-          fi
-
-          if [ -z "$FIRMWARE_FILE" ]; then
-              # Bước 4: Nếu vẫn không tìm thấy, tìm bất kỳ file "*.squashfs-factory.bin" nào trong thư mục đó
-              # (Giả định rằng chỉ có 1 file factory được build cho target này, nếu có nhiều sẽ có rủi ro)
-              FIRMWARE_FILE=$(find "$FIRMWARE_DIR" -maxdepth 1 -name "*.squashfs-factory.bin" -print -quit)
-          fi
-
-          if [ -z "$FIRMWARE_FILE" ]; then
-              echo "Error: Factory firmware file not found in $FIRMWARE_DIR"
-              exit 1
+            echo "Error: Factory firmware file not found in $FIRMWARE_DIR"
+            exit 1
           fi
 
           echo "Found firmware file: $FIRMWARE_FILE"
           echo "firmware_path=$FIRMWARE_FILE" >> $GITHUB_ENV
           echo "artifact_name=$ARTIFACT_NAME" >> $GITHUB_ENV
-          echo "firmware_name=$(basename $FIRMWARE_FILE)" >> $GITHUB_ENV
 
       - name: Upload firmware as artifact
         uses: actions/upload-artifact@v4
