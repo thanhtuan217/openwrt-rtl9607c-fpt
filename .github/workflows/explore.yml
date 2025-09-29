@@ -1,0 +1,33 @@
+# =================================================================
+# Workflow "TRINH SÁT" - Chỉ để khám phá mã nguồn X-WRT
+# =================================================================
+
+name: Explore X-WRT Source
+
+on:
+  # Cho phép chạy thủ công
+  workflow_dispatch:
+
+jobs:
+  explore:
+    runs-on: ubuntu-22.04
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Tải mã nguồn X-WRT
+      run: |
+        chmod +x diy-part1.sh
+        ./diy-part1.sh
+
+    - name: Khám phá cấu trúc Target
+      run: |
+        cd openwrt
+        echo "========================================================"
+        echo "--- Các subtarget có sẵn trong target/linux/realtek ---"
+        ls -l target/linux/realtek/
+        echo "========================================================"
+        echo "--- Các file device tree (*.dts) có sẵn ---"
+        find target/linux/realtek/ -name "*.dts"
+        echo "========================================================"
