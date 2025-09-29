@@ -26,7 +26,7 @@ on:
 
 env:
   TZ: Asia/Ho_Chi_Minh
-  # Tên thư mục chứa mã nguồn (Đã xác nhận từ log: openwrt-rtl9607c-fpt)
+  # Tên thư mục chứa mã nguồn (Đã xác nhận từ log)
   REPO_NAME: openwrt-rtl9607c-fpt
   # Tên người dùng và repository để clone
   CUSTOM_REPO_OWNER: thanhtuan217
@@ -51,33 +51,29 @@ jobs:
           sudo apt install -y build-essential diffutils gawk gcc-multilib libelf-dev libncurses5-dev rsync unzip wget git python3 file libssl-dev
 
       - name: 3. Update Feeds và Thiết lập Cấu hình
+        # SỬA LỖI DỨT ĐIỂM: Dùng && để buộc các lệnh chạy trong cùng một vỏ
         run: |
-          # Dùng lệnh cd TƯỜNG MINH để vào thư mục chứa mã nguồn OpenWrt
-          cd ${{ env.REPO_NAME }}
-          
-          # Lệnh sẽ chạy đúng vị trí và khắc phục lỗi: ./scripts/feeds: No such file or directory
-          ./scripts/feeds update -a
-          ./scripts/feeds install -a
-          
+          cd ${{ env.REPO_NAME }} && \
+          ./scripts/feeds update -a && \
+          ./scripts/feeds install -a && \
           make defconfig
         
       - name: 4. Download Source Code
         run: |
-          cd ${{ env.REPO_NAME }}
+          cd ${{ env.REPO_NAME }} && \
           make download -j$(nproc)
 
       - name: 5. Build Firmware
         run: |
-          cd ${{ env.REPO_NAME }}
+          cd ${{ env.REPO_NAME }} && \
           make -j$(nproc) V=s
 
       - name: 6. Prepare Artifacts
         id: prepare_artifacts
         run: |
-          # Vẫn cần cd để tìm file
+          # Dùng cd TƯỜNG MINH để vào thư mục chứa mã nguồn
           cd ${{ env.REPO_NAME }}
           
-          # Đường dẫn thư mục chứa firmware
           FIRMWARE_DIR="./bin/targets/realtek/rtl9607c" 
           ARTIFACT_NAME="OpenWrt-RTL9607C-WISP"
           
@@ -97,13 +93,12 @@ jobs:
             fi
           fi
 
-          echo "Found firmware file: $FIRMWARE_FILE"
-          echo "firmware_path=${FIRMWARE_FILE}" >> $GITHUB_OUTPUT # OUTPUT file path RELATIVE to the build root
+          # Output file path RELATIVE to the build root
+          echo "firmware_path=${FIRMWARE_FILE}" >> $GITHUB_OUTPUT 
           echo "artifact_name=$ARTIFACT_NAME" >> $GITHUB_OUTPUT
 
       - name: 7. Upload Firmware
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.prepare_artifacts.outputs.artifact_name }}
-          # Path là đường dẫn TƯƠNG ĐỐI TỪ ROOT WORKSPACE
           path: ./${{ env.REPO_NAME }}/${{ steps.prepare_artifacts.outputs.firmware_path }}
