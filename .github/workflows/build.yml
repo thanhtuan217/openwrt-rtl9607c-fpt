@@ -1,7 +1,6 @@
 name: Build OpenWrt RTL9607C (G-97RG6W) WISP Firmware
 
 on:
-  # Cho phép chạy thủ công qua giao diện GitHub
   workflow_dispatch:
     inputs:
       ssh_to_image:
@@ -13,10 +12,8 @@ on:
         required: false
         default: ''
 
-  # Kích hoạt khi có thay đổi trên branch chính
   push:
     branches:
-      - master
       - main
     paths:
       - '.config'
@@ -26,54 +23,71 @@ on:
 
 env:
   TZ: Asia/Ho_Chi_Minh
-  # Tên thư mục chứa mã nguồn (Đã xác nhận từ log)
-  REPO_NAME: openwrt-rtl9607c-fpt
-  # Tên người dùng và repository để clone
-  CUSTOM_REPO_OWNER: thanhtuan217
-  CUSTOM_REPO_NAME: openwrt-rtl9607c-fpt
+  # Repo chứa các file cấu hình và patch của bạn
+  CUSTOM_REPO_PATH: custom_repo
 
 jobs:
   build:
     runs-on: ubuntu-22.04
-
+    
     steps:
-      - name: 1. Checkout Repository Chính (Clone Source Code RTL9607C)
-        uses: actions/checkout@v4
-        with:
-          # Clone repository tùy chỉnh của bạn vào thư mục REPO_NAME
-          repository: ${{ env.CUSTOM_REPO_OWNER }}/${{ env.CUSTOM_REPO_NAME }}
-          ref: main 
-          path: ${{ env.REPO_NAME }} 
-          
-      - name: 2. Install dependencies
+      - name: 1. Install dependencies
         run: |
           sudo apt update
+          # Cài đặt các gói cần thiết để build
           sudo apt install -y build-essential diffutils gawk gcc-multilib libelf-dev libncurses5-dev rsync unzip wget git python3 file libssl-dev
 
-      - name: 3. Update Feeds và Thiết lập Cấu hình
-        # SỬA LỖI DỨT ĐIỂM: Dùng && để buộc các lệnh chạy trong cùng một vỏ
+      - name: 2. Checkout Custom Patch Repository
+        # Clone repo của bạn vào thư mục custom_repo
+        uses: actions/checkout@v4
+        with:
+          path: ${{ env.CUSTOM_REPO_PATH }}
+          # Lấy chính xác repo đang chạy workflow này
+          repository: ${{ github.repository }}
+          ref: ${{ github.ref_name }}
+
+      - name: 3. Clone OpenWrt Source Code (Main Source)
+        # Clone mã nguồn OpenWrt chính thức vào thư mục openwrt
         run: |
-          cd ${{ env.REPO_NAME }} && \
+          echo "Cloning OpenWrt source from git://git.openwrt.org/openwrt.git"
+          git clone --depth 1 git://git.openwrt.org/openwrt.git openwrt
+          
+      - name: 4. Apply Custom Patches (Copy files)
+        # Ghi đè các file cấu hình và patch của bạn lên mã nguồn OpenWrt chính
+        run: |
+          echo "Applying custom patches from custom_repo to openwrt source..."
+          # Copy các thư mục và file cấu hình cần thiết
+          rsync -av ${{ env.CUSTOM_REPO_PATH }}/ openwrt/ \
+            --exclude '.git' \
+            --exclude '.github' \
+            --exclude 'README.md'
+          
+      - name: 5. Update Feeds và Thiết lập Cấu hình
+        # Chạy các lệnh trong thư mục openwrt chính
+        run: |
+          cd openwrt && \
+          # LỖI ĐƯỜNG DẪN ĐÃ ĐƯỢC KHẮC PHỤC: scripts/feeds giờ đã tồn tại
           ./scripts/feeds update -a && \
           ./scripts/feeds install -a && \
           make defconfig
         
-      - name: 4. Download Source Code
+      - name: 6. Download Source Code
         run: |
-          cd ${{ env.REPO_NAME }} && \
+          cd openwrt && \
           make download -j$(nproc)
 
-      - name: 5. Build Firmware
+      - name: 7. Build Firmware
         run: |
-          cd ${{ env.REPO_NAME }} && \
+          cd openwrt && \
           make -j$(nproc) V=s
 
-      - name: 6. Prepare Artifacts
+      - name: 8. Prepare Artifacts
         id: prepare_artifacts
         run: |
-          # Dùng cd TƯỜNG MINH để vào thư mục chứa mã nguồn
-          cd ${{ env.REPO_NAME }}
+          # Vẫn cần cd để tìm file
+          cd openwrt
           
+          # Firmware nằm trong thư mục targets/realtek/rtl9607c
           FIRMWARE_DIR="./bin/targets/realtek/rtl9607c" 
           ARTIFACT_NAME="OpenWrt-RTL9607C-WISP"
           
@@ -85,20 +99,17 @@ jobs:
           FIRMWARE_FILE=$(find "$FIRMWARE_DIR" -maxdepth 1 -type f -name "*g97rg6w*-squashfs-factory.bin" -o -name "*rtl9607c*-squashfs-factory.bin" | head -n 1)
 
           if [ -z "$FIRMWARE_FILE" ]; then
-            echo "::warning::Factory firmware file not found. Attempting to find sysupgrade file."
-            FIRMWARE_FILE=$(find "$FIRMWARE_DIR" -maxdepth 1 -type f -name "*squashfs-sysupgrade.bin" | head -n 1)
-            if [ -z "$FIRMWARE_FILE" ]; then
-                echo "::error::No firmware file found. Build failure is likely."
-                exit 1
-            fi
+            echo "::error::No firmware file found. Build failure is likely."
+            exit 1
           fi
 
-          # Output file path RELATIVE to the build root
+          # Output file path RELATIVE to the build root (openwrt/)
           echo "firmware_path=${FIRMWARE_FILE}" >> $GITHUB_OUTPUT 
           echo "artifact_name=$ARTIFACT_NAME" >> $GITHUB_OUTPUT
 
-      - name: 7. Upload Firmware
+      - name: 9. Upload Firmware
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.prepare_artifacts.outputs.artifact_name }}
-          path: ./${{ env.REPO_NAME }}/${{ steps.prepare_artifacts.outputs.firmware_path }}
+          # Path là đường dẫn TƯƠNG ĐỐI TỪ ROOT WORKSPACE
+          path: ./openwrt/${{ steps.prepare_artifacts.outputs.firmware_path }}
