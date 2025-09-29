@@ -1,4 +1,4 @@
-name: Build OpenWrt RTL9607C (Fix Path Error)
+name: Build OpenWrt RTL9607C (Fix Copy Error and Use 23.05 Stable)
 
 on:
   push:
@@ -8,42 +8,45 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04 # Nên dùng 22.04 thay vì latest
+    runs-on: ubuntu-22.04
     steps:
       - name: 1. Checkout Custom Repository
-        # Bước này checkout toàn bộ repo của bạn vào thư mục GỐC
         uses: actions/checkout@v4
 
       - name: 2. Setup build environment
         run: |
           sudo apt update
+          # Thêm python3-setuptools để tăng ổn định
           sudo apt install -y build-essential clang flex bison g++ gawk \
             gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev \
-            python3-distutils rsync unzip zlib1g-dev file wget
+            python3-distutils python3-setuptools rsync unzip zlib1g-dev file wget
 
-      - name: 3. Clone OpenWrt Source
+      - name: 3. Clone OpenWrt Source (Sử dụng nhánh ổn định 23.05)
         run: |
           echo "Cloning OpenWrt source..."
-          # Clone OpenWrt vào thư mục openwrt
-          git clone --depth 1 https://github.com/openwrt/openwrt.git openwrt
-          
-          # Cần chạy feeds update/install SAU KHI copy custom files để tránh lỗi
-          
-      - name: 4. Copy Custom Target and .config
-        # KHẮC PHỤC LỖI PATH: Copy nội dung từ thư mục gốc vào thư mục openwrt/
+          # Sử dụng nhánh ổn định openwrt-23.05 để tăng tương thích
+          git clone --depth 1 -b openwrt-23.05 https://github.com/openwrt/openwrt.git openwrt
+
+      - name: 4. Copy Custom Target and .config (Khắc phục triệt để lỗi Path)
         run: |
+          # KIỂM TRA QUAN TRỌNG: Đảm bảo thư mục 'target' custom tồn tại
+          if [ ! -d "target" ]; then
+            echo "❌ LỖI NGHIÊM TRỌNG: Thư mục 'target' custom (chứa định nghĩa chip) không tồn tại trong thư mục gốc của repo này!"
+            echo "Vui lòng đảm bảo cấu trúc thư mục của bạn có 'target/'."
+            exit 1
+          fi
+          
           echo "Applying custom files (target/ và .config)..."
           
-          # 1. Copy file .config quan trọng vào thư mục OpenWrt
+          # 1. Copy file .config
           cp -f .config openwrt/.config
           
           # 2. KHẮC PHỤC LỖI: Copy NỘI DUNG thư mục target/ (chứa định nghĩa RTL9607C)
-          # Dùng 'target/*' để copy nội dung đè lên openwrt/target/
+          # Lệnh này đảm bảo copy nội dung an toàn nhất.
           cp -rf target/* openwrt/target/
      
-          # 3. KHẮC PHỤC LỖI: Copy NỘI DUNG thư mục package/ (nếu có)
+          # 3. Copy NỘI DUNG thư mục package/ (nếu có)
           if [ -d "package" ]; then
-            # Dùng 'package/*' để copy nội dung đè lên openwrt/package/
             cp -rf package/* openwrt/package/
             echo "✅ package/ also copied."
           fi
@@ -51,26 +54,24 @@ jobs:
           echo "Finished applying custom files."
 
       - name: 5. Update Feeds và Thiết lập Cấu hình
-        # Bước feeds và defconfig được chạy sau khi custom files đã có
         run: |
           cd openwrt
           ./scripts/feeds update -a
           ./scripts/feeds install -a
           
-          # Đảm bảo cấu hình chip G97RG6W được áp dụng
+          # make defconfig phải chạy sau khi update feeds và copy .config
           make defconfig
 
       - name: 6. Build Firmware
         run: |
           cd openwrt
-          # Tải source code cần thiết
+          # Tải source code cần thiết (luôn chạy trước make)
           make download -j$(nproc)
           # Bắt đầu build
           make -j$(nproc) V=s
           
       - name: 7. Upload Artifacts (Firmware)
-        # Tải file firmware đã build lên GitHub Actions Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: OpenWrt_Firmware_RTL9607C
+          name: OpenWrt_Firmware_RTL9607C_23.05
           path: openwrt/bin/targets/
