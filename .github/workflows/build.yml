@@ -16,20 +16,20 @@ on:
   # Kích hoạt khi có thay đổi trên branch chính (master/main)
   push:
     branches:
-      - master # Hoặc main, tùy vào branch chính của bạn
+      - master
     paths:
       - '.config'
       - '.github/workflows/build.yml'
-      - 'package/**' # Kích hoạt build khi các gói Realtek thay đổi
+      - 'package/**'
 
 env:
   TZ: Asia/Ho_Chi_Minh
-  OPENWRT_BRANCH: openwrt-23.05 # Bạn có thể đổi sang 'main' nếu muốn phiên bản mới nhất
-  REPO_NAME: openwrt # Tên thư mục mã nguồn OpenWrt sau khi clone
+  OPENWRT_BRANCH: openwrt-23.05 # Chi nhánh OpenWrt bạn muốn build
+  REPO_NAME: openwrt # Tên thư mục mã nguồn OpenWrt gốc
 
 jobs:
   build:
-    runs-on: ubuntu-22.04 # Chạy trên runner Ubuntu tiêu chuẩn
+    runs-on: ubuntu-22.04 # Chạy trên runner Ubuntu tiêu chuẩn (ổn định nhất)
     # Đã xóa 'container' để tránh lỗi kéo image
 
     steps:
@@ -37,65 +37,81 @@ jobs:
         # Cài đặt tất cả các gói cần thiết để build OpenWrt
         run: |
           sudo apt update
+          # Thêm libssl-dev và các gói cần thiết khác
           sudo apt install -y build-essential diffutils gawk gcc-multilib libelf-dev libncurses5-dev rsync unzip wget git python3 file libssl-dev
 
       - name: Checkout Custom Files
-        # Lấy các file cấu hình và package của bạn
+        # Bước 1: Lấy các file cấu hình và package tùy chỉnh của bạn
         uses: actions/checkout@v4
         with:
           path: custom_repo # Đặt file của bạn vào thư mục custom_repo
 
       - name: Clone OpenWrt Source
-        # Clone mã nguồn OpenWrt gốc vào thư mục 'openwrt'
+        # Bước 2: Clone mã nguồn OpenWrt gốc
         run: |
+          echo "Cloning OpenWrt branch: ${{ env.OPENWRT_BRANCH }}"
           git clone --depth 1 https://github.com/openwrt/openwrt -b ${{ env.OPENWRT_BRANCH }} ${{ env.REPO_NAME }}
           
-      - name: Install Feeds (in OpenWrt dir)
-        # Chạy scripts/feeds trong thư mục OpenWrt vừa clone
+      - name: Install Feeds
+        # Bước 3: Cập nhật và cài đặt feeds (trong thư mục OpenWrt gốc)
         working-directory: ./${{ env.REPO_NAME }}
         run: |
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
       - name: Copy Custom Packages and Config
-        # Di chuyển các tệp tin tùy chỉnh của bạn vào OpenWrt
+        # Bước 4: Di chuyển các tệp tin tùy chỉnh của bạn vào OpenWrt
         run: |
-          # Copy các packages Realtek của bạn vào thư mục package của OpenWrt
-          cp -r custom_repo/package/* ./${{ env.REPO_NAME }}/package/
-          # Copy .config vào thư mục OpenWrt
+          echo "Copying .config..."
           cp custom_repo/.config ./${{ env.REPO_NAME }}/.config
 
+          # Sử dụng rsync để copy thư mục 'package' an toàn hơn (khắc phục lỗi 'cp: cannot stat')
+          CUSTOM_PACKAGE_DIR="custom_repo/package"
+          OPENWRT_PACKAGE_DIR="./${{ env.REPO_NAME }}/package/"
+
+          if [ -d "$CUSTOM_PACKAGE_DIR" ]; then
+            echo "Copying custom packages using rsync..."
+            # rsync -av: archive mode, copy đệ quy, giữ quyền
+            rsync -av "$CUSTOM_PACKAGE_DIR"/ "$OPENWRT_PACKAGE_DIR"
+            echo "Custom packages copied successfully."
+          else
+            echo "Warning: Directory $CUSTOM_PACKAGE_DIR not found. Skipping package copy."
+          fi
+
       - name: Adjust .config and Apply Patches
+        # Bước 5: Kiểm tra và chuẩn bị cấu hình cuối cùng
         working-directory: ./${{ env.REPO_NAME }}
         run: |
-          # Áp dụng patch nếu bạn có (tôi đã tạm comment, bạn có thể uncomment nếu cần)
-          # if [ -f ../custom_repo/openwrt-rtl9607c-fpt.patch ]; then
-          #   patch -p1 < ../custom_repo/openwrt-rtl9607c-fpt.patch
-          # fi
-          
-          # Chạy defconfig để tích hợp các gói và cấu hình mới
+          # Áp dụng defconfig để tích hợp các gói mới từ feeds và packages tùy chỉnh
+          echo "Running make defconfig..."
           make defconfig
           
-          # Tối ưu hóa .config: Xóa và thêm lại CONFIG_TARGET_DEVICE cho chắc chắn
-          # Giả sử cấu hình target của bạn là realtek/rtl83xx
+          # Tối ưu hóa .config: Xóa và thêm lại CONFIG_TARGET_DEVICE
+          echo "Ensuring G97RG6W device is selected..."
           sed -i '/CONFIG_TARGET_realtek_rtl83xx_DEVICE_.*=y/d' .config
           grep -q "CONFIG_TARGET_realtek_rtl83xx_DEVICE_G97RG6W=y" .config || echo "CONFIG_TARGET_realtek_rtl83xx_DEVICE_G97RG6W=y" >> .config
           
           # Bật SSH nếu được yêu cầu
           if [ "${{ github.event.inputs.ssh_to_image }}" == "true" ]; then
+            echo "Enabling dropbear (SSH) package..."
             sed -i 's/# CONFIG_PACKAGE_dropbear is not set/CONFIG_PACKAGE_dropbear=y/' .config
+            # Cần bật CONFIG_BUSYBOX_CONFIG_SU cho dropbear
+            sed -i 's/# CONFIG_BUSYBOX_CONFIG_SU is not set/CONFIG_BUSYBOX_CONFIG_SU=y/' .config
           fi
-
+          
       - name: Download Build Dependencies
+        # Bước 6: Tải source code cho các gói đã chọn
         working-directory: ./${{ env.REPO_NAME }}
         run: make download -j$(nproc)
 
       - name: Build Firmware
+        # Bước 7: Biên dịch firmware (Lỗi biên dịch 'Error 2' ban đầu sẽ xảy ra ở đây nếu còn lỗi code)
         working-directory: ./${{ env.REPO_NAME }}
         run: make -j$(nproc) V=s
 
       - name: Prepare Artifacts
         id: prepare_artifacts
+        # Bước 8: Tìm và chuẩn bị file firmware
         run: |
           FIRMWARE_DIR="./${{ env.REPO_NAME }}/bin/targets/realtek/rtl83xx"
           ARTIFACT_NAME="OpenWrt-RTL9607C-G97RG6W-Firmware"
@@ -105,7 +121,7 @@ jobs:
             ARTIFACT_NAME="$CUSTOM_NAME"
           fi
           
-          # Logic tìm kiếm file firmware (ưu tiên G97RG6W)
+          # Logic tìm kiếm file firmware factory (ưu tiên G97RG6W)
           FIRMWARE_FILE=$(find "$FIRMWARE_DIR" -maxdepth 1 -type f -name "*g97rg6w*-squashfs-factory.bin" -o -name "*rtl83xx*-squashfs-factory.bin" | head -n 1)
 
           if [ -z "$FIRMWARE_FILE" ]; then
@@ -118,6 +134,7 @@ jobs:
           echo "artifact_name=$ARTIFACT_NAME" >> $GITHUB_ENV
 
       - name: Upload firmware as artifact
+        # Bước 9: Upload file firmware lên GitHub Actions
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.artifact_name }}
