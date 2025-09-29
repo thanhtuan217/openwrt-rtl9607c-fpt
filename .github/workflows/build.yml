@@ -91,10 +91,6 @@ jobs:
         find dl -size -1024c -exec ls -l {} \;
         find dl -size -1024c -exec rm -f {} \;
 
-    - name: SSH connection to Actions
-      uses: P3TERX/debugger-action@main
-      if: github.event.inputs.ssh == 'true'
-
     - name: Compile the firmware
       id: compile
       run: |
