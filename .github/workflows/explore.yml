@@ -1,5 +1,5 @@
 # =================================================================
-# Workflow "TRINH SÁT" - Phiên bản 2.0 - Ổn định hơn
+# Workflow "TRINH SÁT" - Phiên bản 3.0 - Logic mới
 # =================================================================
 
 name: Explore Custom Source
@@ -16,13 +16,13 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Tải mã nguồn OpenWRT gốc (làm mồi)
-      run: git clone https://github.com/openwrt/openwrt.git openwrt
+      run: git clone --depth=1 https://github.com/openwrt/openwrt.git openwrt
 
-    - name: Tải và áp dụng mã nguồn tùy chỉnh
+    - name: Thay thế mã nguồn gốc bằng mã nguồn tùy chỉnh
       run: |
         chmod +x diy-part1.sh
-        cd openwrt
-        ../diy-part1.sh
+        # Chạy script từ thư mục gốc, không cd vào openwrt nữa
+        ./diy-part1.sh
 
     - name: Khám phá cấu trúc Target
       run: |
@@ -32,6 +32,7 @@ jobs:
         ls -l target/linux/
         echo "========================================================"
         echo "--- Các file device tree (*.dts) có sẵn cho realtek ---"
+        # Tìm trong toàn bộ mã nguồn xem có thư mục target nào tên là 'realtek' không
         find target/linux/ -name "realtek" -type d -exec find {} -name "*.dts" \;
         echo "========================================================"
 
