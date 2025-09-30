@@ -1,15 +1,12 @@
 #!/bin/bash
 #
-# Description: Xóa hẳn source gốc và thay bằng Realtek SDK.
-# Tối ưu bởi Gemini cho dự án G-97RG6W (v3 - Logic mới).
+# Description: Tùy chỉnh mã nguồn (nếu cần).
+# Nhiệm vụ clone đã được chuyển sang file workflow chính.
 #
 
-# 1. Xóa hoàn toàn thư mục mã nguồn gốc
-echo 'Xóa sổ mã nguồn OpenWRT gốc...'
-rm -rf ./openwrt
+# Cập nhật các feeds đi kèm với mã nguồn
+echo 'Cập nhật các feeds...'
+./scripts/feeds update -a
+./scripts/feeds install -a
 
-# 2. Clone mã nguồn OpenWRT tích hợp Realtek SDK với đúng tên thư mục 'openwrt'
-echo 'Tải về mã nguồn OpenWRT + Realtek SDK...'
-git clone --depth=1 https://github.com/jekyll2014/rtl819x-sdk-openwrt.git openwrt
-
-echo 'Thay đổi nguyên liệu thành công!'
+echo 'Script tùy chỉnh thực thi thành công!'
