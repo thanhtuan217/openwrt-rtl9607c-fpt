@@ -1,5 +1,5 @@
 # =================================================================
-# Workflow "TRINH SÁT" - Phiên bản 4.0 - Ra lệnh trực tiếp
+# Workflow "TRINH SÁT" - Phiên bản 5.0 - Dùng action chuyên dụng
 # =================================================================
 
 name: Explore Custom Source
@@ -12,11 +12,20 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-    - name: Checkout
+    # Bước 1: Vẫn checkout repo của bạn để lấy các file config
+    - name: Checkout local repository
       uses: actions/checkout@v4
 
-    - name: Tải mã nguồn Realtek SDK trực tiếp
-      run: git clone --depth=1 https://github.com/jekyll2014/rtl819x-sdk-openwrt.git openwrt
+    # Bước 2: Dùng action checkout để tải mã nguồn Realtek SDK vào thư mục 'openwrt'
+    # Đây là cách làm chuẩn và ổn định nhất.
+    - name: Checkout Realtek SDK source code
+      uses: actions/checkout@v4
+      with:
+        repository: 'jekyll2014/rtl819x-sdk-openwrt'
+        path: 'openwrt'
+        # Chỉ tải nhánh chính và lịch sử gần nhất để tăng tốc
+        ref: 'master'
+        depth: 1
 
     - name: Khám phá cấu trúc Target
       run: |
@@ -25,9 +34,11 @@ jobs:
         echo "--- Các thư mục có trong 'target/linux/' ---"
         ls -l target/linux/
         echo "========================================================"
-        echo "--- Các file device tree (*.dts) có thể liên quan ---"
-        # Tìm trong toàn bộ mã nguồn xem có dts nào cho rtl96xx không
-        find target/linux/ -name "*rtl96*.dts"
+        echo "--- Các file device tree (*.dts) cho realtek ---"
+        find target/linux/ -path '*/realtek/dts/*.dts'
+        echo "========================================================"
+        echo "--- Các file config board (*.c) cho realtek ---"
+        find target/linux/ -path '*/realtek/files*/*.c'
         echo "========================================================"
 
     - name: Dừng lại để xem log
