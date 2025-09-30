@@ -1,8 +1,8 @@
 # =================================================================
-# Workflow "TRINH SÁT" - Phiên bản 5.0 - Dùng action chuyên dụng
+# Workflow "TRINH SÁT" - Phiên bản 6.0 - Nguồn SDK mới
 # =================================================================
 
-name: Explore Custom Source
+name: Explore New Realtek Source
 
 on:
   workflow_dispatch:
@@ -12,20 +12,16 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-    # Bước 1: Vẫn checkout repo của bạn để lấy các file config
     - name: Checkout local repository
       uses: actions/checkout@v4
 
-    # Bước 2: Dùng action checkout để tải mã nguồn Realtek SDK vào thư mục 'openwrt'
-    # Đây là cách làm chuẩn và ổn định nhất.
-    - name: Checkout Realtek SDK source code
+    - name: Tải mã nguồn Realtek SDK (Nguồn mới)
       uses: actions/checkout@v4
       with:
-        repository: 'jekyll2014/rtl819x-sdk-openwrt'
+        repository: 'a7621a/Realtek-OPENWRT-19.07.8-ETERNITY'
         path: 'openwrt'
-        # Chỉ tải nhánh chính và lịch sử gần nhất để tăng tốc
         ref: 'master'
-        depth: 1
+        fetch-depth: 1 # Sửa lỗi "depth" thành "fetch-depth" cho đúng chuẩn
 
     - name: Khám phá cấu trúc Target
       run: |
@@ -34,11 +30,8 @@ jobs:
         echo "--- Các thư mục có trong 'target/linux/' ---"
         ls -l target/linux/
         echo "========================================================"
-        echo "--- Các file device tree (*.dts) cho realtek ---"
-        find target/linux/ -path '*/realtek/dts/*.dts'
-        echo "========================================================"
-        echo "--- Các file config board (*.c) cho realtek ---"
-        find target/linux/ -path '*/realtek/files*/*.c'
+        echo "--- Tìm kiếm các file dts liên quan đến 'rtl' ---"
+        find target/linux/ -name "*rtl*.dts"
         echo "========================================================"
 
     - name: Dừng lại để xem log
