@@ -1,18 +1,20 @@
 #!/bin/bash
 #
-# Description: Tải về mã nguồn OpenWRT đã tích hợp Realtek GPON SDK.
+# Description: Thay thế mã nguồn gốc bằng mã nguồn Realtek SDK.
 # Tối ưu bởi Gemini cho dự án G-97RG6W.
 #
 
-# 1. Xóa thư mục mã nguồn cũ (nếu có)
-echo 'Loại bỏ mã nguồn cũ...'
-rm -rf openwrt
+# 1. Xóa toàn bộ nội dung của thư mục mã nguồn gốc
+echo 'Loại bỏ mã nguồn OpenWRT gốc...'
+rm -rf ./*
 
-# 2. Clone mã nguồn OpenWRT tích hợp Realtek SDK
+# 2. Clone mã nguồn OpenWRT tích hợp Realtek SDK vào thư mục hiện tại
 echo 'Tải về mã nguồn OpenWRT + Realtek SDK...'
-git clone https://github.com/jekyll2014/rtl819x-sdk-openwrt.git openwrt
+git clone https://github.com/jekyll2014/rtl819x-sdk-openwrt.git .
 
-# 3. Di chuyển vào thư mục mã nguồn mới
-cd openwrt
+# 3. Cập nhật các feeds đi kèm với mã nguồn mới
+echo 'Cập nhật các feeds...'
+./scripts/feeds update -a
+./scripts/feeds install -a
 
 echo 'Thay đổi nguyên liệu thành công!'
