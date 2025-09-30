@@ -1,5 +1,5 @@
 # =================================================================
-# Workflow "TRINH SÁT" - Phiên bản 3.0 - Logic mới
+# Workflow "TRINH SÁT" - Phiên bản 4.0 - Ra lệnh trực tiếp
 # =================================================================
 
 name: Explore Custom Source
@@ -15,25 +15,19 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Tải mã nguồn OpenWRT gốc (làm mồi)
-      run: git clone --depth=1 https://github.com/openwrt/openwrt.git openwrt
-
-    - name: Thay thế mã nguồn gốc bằng mã nguồn tùy chỉnh
-      run: |
-        chmod +x diy-part1.sh
-        # Chạy script từ thư mục gốc, không cd vào openwrt nữa
-        ./diy-part1.sh
+    - name: Tải mã nguồn Realtek SDK trực tiếp
+      run: git clone --depth=1 https://github.com/jekyll2014/rtl819x-sdk-openwrt.git openwrt
 
     - name: Khám phá cấu trúc Target
       run: |
         cd openwrt
         echo "========================================================"
-        echo "--- Các subtarget có sẵn trong target/linux ---"
+        echo "--- Các thư mục có trong 'target/linux/' ---"
         ls -l target/linux/
         echo "========================================================"
-        echo "--- Các file device tree (*.dts) có sẵn cho realtek ---"
-        # Tìm trong toàn bộ mã nguồn xem có thư mục target nào tên là 'realtek' không
-        find target/linux/ -name "realtek" -type d -exec find {} -name "*.dts" \;
+        echo "--- Các file device tree (*.dts) có thể liên quan ---"
+        # Tìm trong toàn bộ mã nguồn xem có dts nào cho rtl96xx không
+        find target/linux/ -name "*rtl96*.dts"
         echo "========================================================"
 
     - name: Dừng lại để xem log
