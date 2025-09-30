@@ -1,11 +1,10 @@
 # =================================================================
-# Workflow "TRINH SÁT" - Chỉ để khám phá mã nguồn X-WRT
+# Workflow "TRINH SÁT" - Phiên bản 2.0 - Ổn định hơn
 # =================================================================
 
-name: Explore X-WRT Source
+name: Explore Custom Source
 
 on:
-  # Cho phép chạy thủ công
   workflow_dispatch:
 
 jobs:
@@ -16,18 +15,25 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Tải mã nguồn X-WRT
+    - name: Tải mã nguồn OpenWRT gốc (làm mồi)
+      run: git clone https://github.com/openwrt/openwrt.git openwrt
+
+    - name: Tải và áp dụng mã nguồn tùy chỉnh
       run: |
         chmod +x diy-part1.sh
-        ./diy-part1.sh
+        cd openwrt
+        ../diy-part1.sh
 
     - name: Khám phá cấu trúc Target
       run: |
         cd openwrt
         echo "========================================================"
-        echo "--- Các subtarget có sẵn trong target/linux/realtek ---"
-        ls -l target/linux/realtek/
+        echo "--- Các subtarget có sẵn trong target/linux ---"
+        ls -l target/linux/
         echo "========================================================"
-        echo "--- Các file device tree (*.dts) có sẵn ---"
-        find target/linux/realtek/ -name "*.dts"
+        echo "--- Các file device tree (*.dts) có sẵn cho realtek ---"
+        find target/linux/ -name "realtek" -type d -exec find {} -name "*.dts" \;
         echo "========================================================"
+
+    - name: Dừng lại để xem log
+      run: exit 1
